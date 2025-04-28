@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Uniform Cost Search Visualizer (Pro Max 🔥)</title>
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    body {
+      font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      margin: 0;
+      padding: 0;
+      color: #fff;
+      min-height: 100vh;
+    }
+    h1 {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 2.8em;
+      letter-spacing: 1px;
+    }
+    .container {
+      width: 90%;
+      margin: 20px auto;
+      background: rgba(255,255,255,0.08);
+      padding: 20px;
+      border-radius: 20px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 10px;
+    }
+    input, button, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      margin-bottom: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1em;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .connections div {
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .queue, .explanation {
+      margin-top: 20px;
+      padding: 10px;
+      background: rgba(0,0,0,0.25);
+      border-radius: 12px;
+    }
+    .node {
+      display: inline-block;
+      background: #ff9800;
+      padding: 8px 12px;
+      border-radius: 30px;
+      margin: 5px;
+    }
+    .highlight {
+      background: #03a9f4 !important;
+      color: #fff;
+      font-weight: bold;
+    }
+    .success {
+      background: #4CAF50 !important;
+      color: #fff;
+      font-weight: bold;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .speed {
+      background: #2196F3;
+    }
+    .delete-btn {
+      background: #ff4d4d;
+      border-radius: 50%;
+      padding: 5px 8px;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      border: none;
+    }
+    .delete-btn:hover {
+      background: #ff1a1a;
+    }
+    footer {
+      text-align: center;
+      font-size: 0.8em;
+      margin-top: 30px;
+      opacity: 0.7;
+    }
+    #network {
+      background: white;
+      border-radius: 12px;
+      height: 400px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>Uniform Cost Search Visualizer (Pro Max 🔥)</h1>
+
+<div class="container">
+
+  <div class="connections" id="connections"></div>
+  <button onclick="addConnection()">➕ Add Connection</button>
+
+  <label for="startNode">Start Node</label>
+  <input type="text" id="startNode" placeholder="Enter Start Node (e.g. A)">
+
+  <label for="goalNode">Goal Node</label>
+  <input type="text" id="goalNode" placeholder="Enter Goal Node (e.g. G)">
+
+  <div class="controls">
+    <button onclick="startSearch()">🚀 Start Search</button>
+    <select id="speedControl" class="speed">
+      <option value="1000">Normal Speed</option>
+      <option value="500">Fast Speed</option>
+      <option value="200">Super Fast</option>
+    </select>
+  </div>
+
+  <div id="network"></div>
+
+  <div class="queue" id="queueDisplay">
+    <h2>🛒 Frontier Queue</h2>
+    <div id="queueNodes"></div>
+  </div>
+
+  <div class="explanation" id="explanation">
+    <h2>📚 Step-by-Step Explanation</h2>
+    <div id="steps"></div>
+  </div>
+
+</div>
+
+<footer>Made with ❤️ by Your Bro (ChatGPT)</footer>
+
+<script>
+let connections = [];
+let nodes = new vis.DataSet([]);
+let edges = new vis.DataSet([]);
+let network;
+
+function addConnection() {
+  const div = document.createElement('div');
+  div.innerHTML = `
+    <input type="text" placeholder="From Node" class="from">
+    <input type="text" placeholder="To Node" class="to">
+    <input type="number" placeholder="Cost" class="cost">
+    <button class="delete-btn" onclick="deleteConnection(this)">🗑️</button>
+  `;
+  document.getElementById('connections').appendChild(div);
+}
+
+function deleteConnection(btn) {
+  btn.parentElement.remove();
+  updateGraph();
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function updateGraph() {
+  nodes.clear();
+  edges.clear();
+
+  const fromInputs = document.querySelectorAll('.from');
+  const toInputs = document.querySelectorAll('.to');
+  const costInputs = document.querySelectorAll('.cost');
+
+  let addedNodes = new Set();
+
+  for (let i = 0; i < fromInputs.length; i++) {
+    const from = fromInputs[i].value.trim().toUpperCase();
+    const to = toInputs[i].value.trim().toUpperCase();
+    const cost = parseInt(costInputs[i].value.trim());
+
+    if (from && to && !isNaN(cost)) {
+      if (!addedNodes.has(from)) {
+        nodes.add({ id: from, label: from });
+        addedNodes.add(from);
+      }
+      if (!addedNodes.has(to)) {
+        nodes.add({ id: to, label: to });
+        addedNodes.add(to);
+      }
+      edges.add({ from: from, to: to, label: cost.toString(), font: { align: 'top' } });
+    }
+  }
+
+  const container = document.getElementById('network');
+  const data = { nodes: nodes, edges: edges };
+  const options = {
+    physics: false,
+    edges: {
+      arrows: 'to',
+      smooth: {
+        type: 'cubicBezier',
+        forceDirection: 'horizontal',
+        roundness: 0.4
+      },
+      color: {
+        color: '#ff9800',
+        highlight: '#03a9f4'
+      }
+    },
+    nodes: {
+      color: {
+        background: '#4CAF50',
+        border: '#2e7d32',
+        highlight: { background: '#81c784', border: '#388e3c' }
+      },
+      font: { color: '#000', size: 18, face: 'Poppins' }
+    }
+  };
+  network = new vis.Network(container, data, options);
+}
+
+async function startSearch() {
+  connections = [];
+  const fromInputs = document.querySelectorAll('.from');
+  const toInputs = document.querySelectorAll('.to');
+  const costInputs = document.querySelectorAll('.cost');
+
+  for (let i = 0; i < fromInputs.length; i++) {
+    const from = fromInputs[i].value.trim().toUpperCase();
+    const to = toInputs[i].value.trim().toUpperCase();
+    const cost = parseInt(costInputs[i].value.trim());
+
+    if (!from || !to || isNaN(cost)) {
+      alert("Please fill all connection fields correctly!");
+      return;
+    }
+
+    connections.push({ from, to, cost });
+  }
+
+  const start = document.getElementById('startNode').value.trim().toUpperCase();
+  const goal = document.getElementById('goalNode').value.trim().toUpperCase();
+
+  if (!start || !goal) {
+    alert("Please enter both Start and Goal nodes!");
+    return;
+  }
+
+  let graph = {};
+  connections.forEach(conn => {
+    if (!graph[conn.from]) graph[conn.from] = [];
+    graph[conn.from].push({ node: conn.to, cost: conn.cost });
+  });
+
+  const queueDisplay = document.getElementById('queueNodes');
+  const explanation = document.getElementById('steps');
+  queueDisplay.innerHTML = '';
+  explanation.innerHTML = '';
+
+  let frontier = [{ path: [start], node: start, cost: 0 }];
+  let explored = [];
+
+  const speed = parseInt(document.getElementById('speedControl').value);
+
+  while (frontier.length > 0) {
+    frontier.sort((a, b) => a.cost - b.cost);
+    renderQueue(frontier);
+
+    let current = frontier.shift();
+    explored.push(current.node);
+
+    logStep(`Expanding node <b class="node highlight">${current.node}</b> with cumulative cost ${current.cost}`);
+
+    if (current.node === goal) {
+      logStep(`<span class="node success">🎯 Goal ${goal} Reached!</span><br>Path: ${current.path.join(' ➔ ')}<br>Total Cost: ${current.cost}`);
+      return;
+    }
+
+    if (graph[current.node]) {
+      for (let neighbor of graph[current.node]) {
+        if (!explored.includes(neighbor.node)) {
+          frontier.push({
+            path: [...current.path, neighbor.node],
+            node: neighbor.node,
+            cost: current.cost + neighbor.cost
+          });
+          logStep(`Adding neighbor <b class="node">${neighbor.node}</b> to frontier with path cost ${current.cost + neighbor.cost}`);
+        }
+      }
+    }
+    await sleep(speed);
+  }
+
+  logStep(`💥 No Path Found to Goal ${goal}.`);
+}
+
+function renderQueue(frontier) {
+  const queueDiv = document.getElementById('queueNodes');
+  queueDiv.innerHTML = '';
+  frontier.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'node';
+    div.textContent = `${item.node} (${item.cost})`;
+    queueDiv.appendChild(div);
+  });
+}
+
+function logStep(message) {
+  const stepsDiv = document.getElementById('steps');
+  const p = document.createElement('p');
+  p.innerHTML = message;
+  stepsDiv.appendChild(p);
+  stepsDiv.scrollTop = stepsDiv.scrollHeight;
+}
+// Add initial connection form
+addConnection();
+setInterval(updateGraph, 1000); // Auto update graph every second
+</script>
+</body>
+</html>
